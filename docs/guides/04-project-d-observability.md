@@ -47,19 +47,20 @@ nano terraform.tfvars
 **Required variables:**
 
 ```hcl
-aws_region   = "eu-west-1"
-environment  = "dev"
-project_name = "devops-pro-d"
+region         = "eu-west-1"
+alb_name       = "app/demo-ecs-bluegreen-alb/1234567890abcdef"
+ecs_cluster    = "demo-ecs-bluegreen-cluster"
+ecs_service    = "demo-ecs-bluegreen-service"
+log_group_name = "/ecs/demo-api"
 
-alert_email = "your-email@example.com"
+# Optional: Synthetics canary endpoint (leave empty to skip)
+canary_endpoint = "http://your-alb-dns.eu-west-1.elb.amazonaws.com/health"
+```
 
-# Application endpoints (use placeholders if Project A not running)
-alb_arn_suffix   = "app/my-alb/1234567890"
-ecs_cluster_name = "devops-pro-cluster"
-ecs_service_name = "devops-pro-service"
-
-# Synthetics target
-canary_target_url = "https://example.com"
+**To get ALB name from Project A:**
+```bash
+aws elbv2 describe-load-balancers --names demo-ecs-bluegreen-alb \
+  --query 'LoadBalancers[0].LoadBalancerArn' --output text | sed 's/.*:loadbalancer\///'
 ```
 
 ## Step 3: Deploy
@@ -70,7 +71,7 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-**Deployment takes 5-10 minutes.**
+**Deployment takes 2-5 minutes (longer if Synthetics canary enabled).**
 
 ## Step 4: Capture Outputs
 
@@ -88,31 +89,29 @@ terraform output canary_name
 ### View Dashboard
 
 ```bash
-echo "https://console.aws.amazon.com/cloudwatch/home?region=eu-west-1#dashboards:name=$(terraform output -raw dashboard_name)"
-```
-
-### Verify Dashboard Widgets
-
-```bash
-aws cloudwatch get-dashboard --dashboard-name $(terraform output -raw dashboard_name) | jq '.DashboardBody | fromjson | .widgets[] | {type, properties: .properties.title}'
+terraform output dashboard_url
+# Or directly:
+echo "https://eu-west-1.console.aws.amazon.com/cloudwatch/home?region=eu-west-1#dashboards:name=app-observability"
 ```
 
 ### List Metric Alarms
 
 ```bash
-aws cloudwatch describe-alarms --alarm-name-prefix devops-pro-d | jq '.MetricAlarms[] | {name: .AlarmName, state: .StateValue, type: .Statistic}'
+aws cloudwatch describe-alarms --query 'MetricAlarms[].{Name:AlarmName,State:StateValue}' --output table
 ```
 
 ### Check Composite Alarm
 
 ```bash
-aws cloudwatch describe-alarms --alarm-types CompositeAlarm | jq '.CompositeAlarms[] | {name: .AlarmName, state: .StateValue, rule: .AlarmRule}'
+aws cloudwatch describe-alarms --alarm-types CompositeAlarm \
+  --query 'CompositeAlarms[].{Name:AlarmName,State:StateValue,Rule:AlarmRule}' --output table
 ```
 
 ### Check Anomaly Detection Alarm
 
 ```bash
-aws cloudwatch describe-alarms --alarm-name-prefix devops-pro-d-anomaly | jq '.MetricAlarms[] | {name: .AlarmName, threshold: .ThresholdMetricId}'
+aws cloudwatch describe-alarms --alarm-name-prefix Request-Count-Anomaly \
+  --query 'MetricAlarms[].{Name:AlarmName,State:StateValue}' --output table
 ```
 
 ---
@@ -122,15 +121,17 @@ aws cloudwatch describe-alarms --alarm-name-prefix devops-pro-d-anomaly | jq '.M
 ```bash
 # Set alarm to ALARM state
 aws cloudwatch set-alarm-state \
-  --alarm-name $(terraform output -raw alb_5xx_alarm_name) \
+  --alarm-name ALB-5xx-High \
   --state-value ALARM \
   --state-reason "Testing alarm notification"
 
-# Check your email for SNS notification
+# Check alarm state
+aws cloudwatch describe-alarms --alarm-names ALB-5xx-High \
+  --query 'MetricAlarms[0].StateValue' --output text
 
 # Reset to OK
 aws cloudwatch set-alarm-state \
-  --alarm-name $(terraform output -raw alb_5xx_alarm_name) \
+  --alarm-name ALB-5xx-High \
   --state-value OK \
   --state-reason "Test complete"
 ```
@@ -142,21 +143,26 @@ aws cloudwatch set-alarm-state \
 ### List Metric Filters
 
 ```bash
-aws logs describe-metric-filters --log-group-name $(terraform output -raw log_group_name) | jq '.metricFilters[] | {name: .filterName, pattern: .filterPattern}'
+aws logs describe-metric-filters --log-group-name /ecs/demo-api \
+  --query 'metricFilters[].{Name:filterName,Pattern:filterPattern}' --output table
 ```
 
 ### Test Metric Filter
 
 ```bash
-# Put a test log event
+# Create test log stream
+aws logs create-log-stream --log-group-name /ecs/demo-api --log-stream-name test-stream 2>/dev/null || true
+
+# Put a test log event with ERROR
+TIMESTAMP=$(date +%s)000
 aws logs put-log-events \
-  --log-group-name $(terraform output -raw log_group_name) \
+  --log-group-name /ecs/demo-api \
   --log-stream-name test-stream \
-  --log-events timestamp=$(date +%s000),message="ERROR: Test error message"
+  --log-events "[{\"timestamp\":$TIMESTAMP,\"message\":\"ERROR: Test error message\"}]"
 
 # Wait a minute, then check the metric
 aws cloudwatch get-metric-statistics \
-  --namespace "DevOpsPro/Application" \
+  --namespace "DemoApp" \
   --metric-name "ErrorCount" \
   --start-time $(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
@@ -171,13 +177,15 @@ aws cloudwatch get-metric-statistics \
 ### Check Sampling Rules
 
 ```bash
-aws xray get-sampling-rules | jq '.SamplingRuleRecords[] | {name: .SamplingRule.RuleName, rate: .SamplingRule.FixedRate}'
+aws xray get-sampling-rules \
+  --query 'SamplingRuleRecords[?SamplingRule.RuleName!=`Default`].SamplingRule.{Name:RuleName,Rate:FixedRate}' \
+  --output table
 ```
 
 ### Check Trace Groups
 
 ```bash
-aws xray get-groups | jq '.Groups[] | {name: .GroupName, filterExpression: .FilterExpression}'
+aws xray get-groups --query 'Groups[].{Name:GroupName,Filter:FilterExpression}' --output table
 ```
 
 ---
@@ -187,40 +195,42 @@ aws xray get-groups | jq '.Groups[] | {name: .GroupName, filterExpression: .Filt
 ### Check Canary Status
 
 ```bash
-aws synthetics describe-canaries | jq '.Canaries[] | {name: .Name, status: .Status.State, schedule: .Schedule.Expression}'
+aws synthetics describe-canaries \
+  --query 'Canaries[].{Name:Name,Status:Status.State,Schedule:Schedule.Expression}' --output table
 ```
 
 ### Get Canary Runs
 
 ```bash
-CANARY_NAME=$(terraform output -raw canary_name)
-aws synthetics get-canary-runs --name $CANARY_NAME | jq '.CanaryRuns[] | {status: .Status.State, startTime: .Timeline.Started}'
+aws synthetics get-canary-runs --name app-heartbeat \
+  --query 'CanaryRuns[0:3].{Status:Status.State,Started:Timeline.Started}' --output table
 ```
 
 ---
 
 ## Test Custom Metrics with EMF
 
-### Run the EMF Publisher Script
+### Publish EMF Metric
 
 ```bash
-cd ~/aws-devops-pro-projects/project-d-observability-cloudwatch/scripts
-pip install boto3
-python emf_publisher.py
+# Create log stream for EMF
+aws logs create-log-stream --log-group-name /ecs/demo-api --log-stream-name emf-test 2>/dev/null || true
+
+# Publish EMF formatted log (CloudWatch extracts metrics automatically)
+TIMESTAMP=$(date +%s)000
+aws logs put-log-events \
+  --log-group-name /ecs/demo-api \
+  --log-stream-name emf-test \
+  --log-events "[{\"timestamp\":$TIMESTAMP,\"message\":\"{\\\"_aws\\\":{\\\"Timestamp\\\":$TIMESTAMP,\\\"CloudWatchMetrics\\\":[{\\\"Namespace\\\":\\\"DemoApp\\\",\\\"Dimensions\\\":[[\\\"Service\\\"]],\\\"Metrics\\\":[{\\\"Name\\\":\\\"Latency\\\",\\\"Unit\\\":\\\"Milliseconds\\\"}]}]},\\\"Service\\\":\\\"api\\\",\\\"Latency\\\":150}\"}]"
+
+echo "EMF metric published! CloudWatch will extract to DemoApp namespace."
 ```
 
 ### Verify Custom Metrics
 
 ```bash
-aws cloudwatch list-metrics --namespace "DevOpsPro/Application" | jq '.Metrics[] | {name: .MetricName, dimensions: .Dimensions}'
-
-aws cloudwatch get-metric-statistics \
-  --namespace "DevOpsPro/Application" \
-  --metric-name "RequestLatency" \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  --period 60 \
-  --statistics Average
+aws cloudwatch list-metrics --namespace "DemoApp" \
+  --query 'Metrics[].{Name:MetricName,Dimensions:Dimensions}' --output table
 ```
 
 ---
@@ -228,15 +238,18 @@ aws cloudwatch get-metric-statistics \
 ## Run Logs Insights Queries
 
 ```bash
+START_TIME=$(($(date +%s) - 3600))
+END_TIME=$(date +%s)
+
 QUERY_ID=$(aws logs start-query \
-  --log-group-name $(terraform output -raw log_group_name) \
-  --start-time $(date -u -d '1 hour ago' +%s) \
-  --end-time $(date -u +%s) \
+  --log-group-name /ecs/demo-api \
+  --start-time $START_TIME \
+  --end-time $END_TIME \
   --query-string 'fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc | limit 20' \
   --query 'queryId' --output text)
 
 sleep 5
-aws logs get-query-results --query-id $QUERY_ID | jq '.results'
+aws logs get-query-results --query-id $QUERY_ID --query 'results[*][0:2]' --output table
 ```
 
 ---
@@ -248,15 +261,36 @@ cd ~/aws-devops-pro-projects/project-d-observability-cloudwatch/infra-terraform
 terraform destroy
 ```
 
-### Manual Cleanup
+### Manual Cleanup (if Synthetics was enabled)
 
 ```bash
-CANARY_NAME=$(terraform output -raw canary_name)
-CANARY_BUCKET=$(aws s3 ls | grep synthetics | awk '{print $3}')
-aws s3 rm s3://$CANARY_BUCKET --recursive
-aws s3 rb s3://$CANARY_BUCKET
-aws logs delete-log-group --log-group-name /aws/synthetics/$CANARY_NAME
+# Get canary bucket name
+CANARY_BUCKET=$(terraform output -raw canary_bucket 2>/dev/null)
+if [ -n "$CANARY_BUCKET" ]; then
+  aws s3 rm s3://$CANARY_BUCKET --recursive
+  aws s3 rb s3://$CANARY_BUCKET
+  aws logs delete-log-group --log-group-name /aws/lambda/cwsyn-app-heartbeat* 2>/dev/null || true
+fi
 ```
+
+---
+
+## Troubleshooting
+
+### Metric Filter Not Working
+- Simple patterns like `ERROR` don't support dimensions
+- Dimensions require structured log patterns with field extraction
+- Check filter pattern syntax in CloudWatch console
+
+### Synthetics Canary Fails
+- Ensure `canary_endpoint` is accessible from AWS (public URL)
+- Check canary logs in `/aws/lambda/cwsyn-<canary-name>*`
+- Runtime must be current (syn-nodejs-puppeteer-9.1 or later)
+
+### Alarms Stuck in INSUFFICIENT_DATA
+- Metrics need data points to evaluate
+- Generate traffic to ALB or wait for ECS metrics
+- Use `set-alarm-state` to test alarm actions
 
 ---
 
@@ -264,7 +298,7 @@ aws logs delete-log-group --log-group-name /aws/synthetics/$CANARY_NAME
 
 - ✅ CloudWatch Dashboard creation and widgets
 - ✅ Metric alarms (threshold-based)
-- ✅ Composite alarms
+- ✅ Composite alarms (AND/OR logic)
 - ✅ Anomaly detection alarms
 - ✅ Log metric filters
 - ✅ CloudWatch Logs Insights queries
