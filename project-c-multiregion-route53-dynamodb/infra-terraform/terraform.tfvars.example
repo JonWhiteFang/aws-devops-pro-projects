@@ -1,0 +1,5 @@
+region_a       = "eu-west-1"
+region_b       = "eu-west-2"
+project        = "multiregion-app"
+enable_route53 = false
+# domain_name  = "example.com"  # Uncomment if you have a Route 53 hosted zone

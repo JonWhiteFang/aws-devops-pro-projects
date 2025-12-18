@@ -1,0 +1,34 @@
+version: 0.2
+env:
+  variables:
+    IMAGE_REPO_NAME: demo-api
+    CONTAINER_NAME: app
+  shell: bash
+phases:
+  pre_build:
+    commands:
+      - aws --version
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+      - REPOSITORY_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
+  build:
+    commands:
+      - echo Build started on `date`
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+  post_build:
+    commands:
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:latest
+      - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
+      - sed -i "s|<EXECUTION_ROLE_ARN>|${EXECUTION_ROLE_ARN}|g" taskdef.json
+      - sed -i "s|<TASK_ROLE_ARN>|${TASK_ROLE_ARN}|g" taskdef.json
+      - sed -i "s|\${AWS_REGION}|${AWS_DEFAULT_REGION}|g" taskdef.json
+      - sed -i "s|REPLACE_ME_ECR_URI:latest|${REPOSITORY_URI}:${IMAGE_TAG}|g" taskdef.json
+artifacts:
+  files:
+    - appspec.yaml
+    - taskdef.json
+    - imagedefinitions.json

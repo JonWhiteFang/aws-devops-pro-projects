@@ -1,0 +1,5 @@
+region         = "eu-west-1"
+alb_name       = "app/demo-ecs-bluegreen-alb/1234567890abcdef"
+ecs_cluster    = "demo-ecs-bluegreen-cluster"
+ecs_service    = "demo-ecs-bluegreen-service"
+log_group_name = "/ecs/demo-api"

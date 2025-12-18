@@ -1,0 +1,71 @@
+name: Terraform Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project:
+          - project-a-cicd-ecs-bluegreen/infra-terraform
+          - project-b-iac-config-remediation/infra-terraform
+          - project-c-multiregion-route53-dynamodb/infra-terraform
+          - project-d-observability-cloudwatch/infra-terraform
+          - project-e-incident-response-ssm/infra-terraform
+          - project-f-governance-multiaccount/infra-terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ matrix.project }}
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.project }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ matrix.project }}
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: true
+
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: Init TFLint
+        run: tflint --init
+
+      - name: Run TFLint
+        run: |
+          for dir in project-*/infra-terraform; do
+            echo "Linting $dir"
+            tflint --chdir="$dir" || true
+          done
