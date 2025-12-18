@@ -69,7 +69,7 @@ resource "aws_synthetics_canary" "heartbeat" {
   name                 = "app-heartbeat"
   artifact_s3_location = "s3://${aws_s3_bucket.canary[0].id}/"
   execution_role_arn   = aws_iam_role.canary[0].arn
-  runtime_version      = "syn-nodejs-puppeteer-6.1"
+  runtime_version      = "syn-nodejs-puppeteer-9.1"
   handler              = "heartbeat.handler"
   start_canary         = true
 
