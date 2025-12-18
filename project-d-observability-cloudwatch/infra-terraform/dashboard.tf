@@ -178,13 +178,9 @@ resource "aws_cloudwatch_log_metric_filter" "errors" {
   log_group_name = var.log_group_name
 
   metric_transformation {
-    name          = "ErrorCount"
-    namespace     = "DemoApp"
-    value         = "1"
-    default_value = "0"
-    dimensions = {
-      Service = "api"
-    }
+    name      = "ErrorCount"
+    namespace = "DemoApp"
+    value     = "1"
   }
 }
 
