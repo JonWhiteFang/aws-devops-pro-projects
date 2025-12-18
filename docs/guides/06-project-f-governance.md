@@ -1,7 +1,7 @@
-# Project F: Governance & Multi-Account
+# Project F: Governance & Security Services
 
 **Exam Domain:** Domain 6 — Policies and Standards Automation
-**Time:** 60-90 minutes setup, 30-45 minutes validation
+**Time:** 20-30 minutes setup, 15-20 minutes validation
 
 ---
 
@@ -9,37 +9,18 @@
 
 **Required:**
 - S3 state bucket from bootstrap setup
-- **AWS Organizations** - must be run from the management account
-- **Audit account** - a separate AWS account to delegate Security Hub/GuardDuty admin
 
-⚠️ **This project cannot be run in a standalone AWS account.**
-
-If you don't have AWS Organizations, you can still review the code to understand:
-- SCP structure and policies
-- Organization CloudTrail configuration  
-- Delegated admin patterns for Security Hub/GuardDuty
+**Note:** This project deploys single-account security services. SCP examples are provided in `policies/` for exam study but require AWS Organizations to deploy.
 
 ---
 
 ## Overview
 
-Deploy organisational governance with:
-- Service Control Policies (SCPs)
-- CloudTrail organisation trail
-- Security Hub and GuardDuty with delegated admin
-- IAM Access Analyzer
-- CloudFormation StackSets
-
----
-
-## Setup (if you have AWS Organizations)
-
-If you don't have an organisation but want to create one:
-
-```bash
-aws organizations create-organization --feature-set ALL
-aws organizations describe-organization | jq '.Organization | {id: .Id, masterAccountId: .MasterAccountId}'
-```
+Deploy account-level security and governance:
+- CloudTrail (multi-region trail with log validation)
+- Security Hub (security findings aggregation)
+- GuardDuty (threat detection)
+- IAM Access Analyzer (external access detection)
 
 ---
 
@@ -49,41 +30,7 @@ aws organizations describe-organization | jq '.Organization | {id: .Id, masterAc
 cd ~/aws-devops-pro-projects/project-f-governance-multiaccount/infra-terraform
 ```
 
-## Step 2: Configure Variables
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
-nano terraform.tfvars
-```
-
-**Required variables:**
-
-```hcl
-aws_region   = "eu-west-1"
-environment  = "dev"
-project_name = "devops-pro-f"
-
-organization_id                = "o-xxxxxxxxxx"
-security_hub_admin_account_id  = "123456789012"
-guardduty_admin_account_id     = "123456789012"
-cloudtrail_bucket_name         = "devops-pro-cloudtrail-logs"
-stackset_target_ous            = ["ou-xxxx-xxxxxxxx"]
-```
-
-## Step 3: Enable Trusted Access
-
-```bash
-aws organizations enable-aws-service-access --service-principal cloudtrail.amazonaws.com
-aws organizations enable-aws-service-access --service-principal securityhub.amazonaws.com
-aws organizations enable-aws-service-access --service-principal guardduty.amazonaws.com
-aws organizations enable-aws-service-access --service-principal access-analyzer.amazonaws.com
-aws organizations enable-aws-service-access --service-principal member.org.stacksets.cloudformation.amazonaws.com
-
-# Verify
-aws organizations list-aws-service-access-for-organization | jq '.EnabledServicePrincipals[] | .ServicePrincipal'
-```
-
-## Step 4: Deploy
+## Step 2: Deploy
 
 ```bash
 terraform init
@@ -91,71 +38,15 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-**Deployment takes 15-25 minutes.**
+**Deployment takes 3-5 minutes.**
 
-## Step 5: Capture Outputs
+## Step 3: Capture Outputs
 
 ```bash
 terraform output -json > ../outputs.json
-terraform output cloudtrail_arn
-terraform output security_hub_arn
+terraform output cloudtrail_name
+terraform output guardduty_detector_id
 terraform output access_analyzer_arn
-```
-
----
-
-## Validate SCPs
-
-### List SCPs
-
-```bash
-aws organizations list-policies --filter SERVICE_CONTROL_POLICY | jq '.Policies[] | {id: .Id, name: .Name}'
-```
-
-### View SCP Content
-
-```bash
-SCP_ID=$(aws organizations list-policies --filter SERVICE_CONTROL_POLICY --query 'Policies[?Name==`DenyPublicS3`].Id' --output text)
-aws organizations describe-policy --policy-id $SCP_ID | jq '.Policy.Content | fromjson'
-```
-
-### Check SCP Attachments
-
-```bash
-aws organizations list-targets-for-policy --policy-id $SCP_ID | jq '.Targets[] | {targetId: .TargetId, type: .Type}'
-```
-
----
-
-## Test SCP Enforcement
-
-From a member account with the SCP attached:
-
-### Test Deny Public S3 SCP
-
-```bash
-# This should fail
-aws s3api put-bucket-acl --bucket test-bucket --acl public-read
-# Expected: Access Denied
-```
-
-### Test Deny Unsupported Regions SCP
-
-```bash
-# This should fail if region is blocked
-aws ec2 describe-instances --region ap-northeast-3
-# Expected: Access Denied
-```
-
-### Test Require IMDSv2 SCP
-
-```bash
-# This should fail
-aws ec2 run-instances \
-  --image-id ami-12345678 \
-  --instance-type t3.micro \
-  --metadata-options HttpTokens=optional
-# Expected: Access Denied
 ```
 
 ---
@@ -165,21 +56,20 @@ aws ec2 run-instances \
 ### Check Trail Status
 
 ```bash
-aws cloudtrail describe-trails | jq '.trailList[] | {name: .Name, isOrganizationTrail: .IsOrganizationTrail, isMultiRegionTrail: .IsMultiRegionTrail}'
+aws cloudtrail describe-trails --region eu-west-1 | jq '.trailList[] | {name: .Name, isMultiRegionTrail: .IsMultiRegionTrail}'
 ```
 
 ### Verify Trail is Logging
 
 ```bash
-TRAIL_NAME=$(terraform output -raw cloudtrail_name)
-aws cloudtrail get-trail-status --name $TRAIL_NAME | jq '{isLogging: .IsLogging, latestDeliveryTime: .LatestDeliveryTime}'
+aws cloudtrail get-trail-status --name account-trail --region eu-west-1 | jq '{isLogging: .IsLogging, latestDeliveryTime: .LatestDeliveryTime}'
 ```
 
 ### Check CloudTrail S3 Bucket
 
 ```bash
 BUCKET=$(terraform output -raw cloudtrail_bucket)
-aws s3 ls s3://$BUCKET --recursive | head -20
+aws s3 ls s3://$BUCKET --recursive | head -10
 ```
 
 ---
@@ -187,10 +77,14 @@ aws s3 ls s3://$BUCKET --recursive | head -20
 ## Validate Security Hub
 
 ```bash
-aws securityhub describe-hub | jq '{hubArn: .HubArn, subscribedAt: .SubscribedAt}'
-aws securityhub get-enabled-standards | jq '.StandardsSubscriptions[] | {standardArn: .StandardsArn, status: .StandardsStatus}'
-aws securityhub get-findings --max-items 5 | jq '.Findings[] | {title: .Title, severity: .Severity.Label, status: .Workflow.Status}'
-aws securityhub list-organization-admin-accounts | jq '.AdminAccounts[] | {accountId: .AccountId, status: .Status}'
+# Check Security Hub is enabled
+aws securityhub describe-hub --region eu-west-1 | jq '{hubArn: .HubArn, subscribedAt: .SubscribedAt}'
+
+# List enabled standards
+aws securityhub get-enabled-standards --region eu-west-1 | jq '.StandardsSubscriptions[] | {standardArn: .StandardsArn, status: .StandardsStatus}'
+
+# Get recent findings
+aws securityhub get-findings --region eu-west-1 --max-items 5 | jq '.Findings[] | {title: .Title, severity: .Severity.Label}'
 ```
 
 ---
@@ -198,10 +92,14 @@ aws securityhub list-organization-admin-accounts | jq '.AdminAccounts[] | {accou
 ## Validate GuardDuty
 
 ```bash
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)
-aws guardduty get-detector --detector-id $DETECTOR_ID | jq '{status: .Status, findingPublishingFrequency: .FindingPublishingFrequency}'
-aws guardduty list-findings --detector-id $DETECTOR_ID --max-results 5 | jq '.FindingIds'
-aws guardduty list-organization-admin-accounts | jq '.AdminAccounts[] | {accountId: .AdminAccountId, status: .AdminStatus}'
+# Get detector ID
+DETECTOR_ID=$(aws guardduty list-detectors --region eu-west-1 --query 'DetectorIds[0]' --output text)
+
+# Check detector status
+aws guardduty get-detector --detector-id $DETECTOR_ID --region eu-west-1 | jq '{status: .Status, findingPublishingFrequency: .FindingPublishingFrequency}'
+
+# List findings (if any)
+aws guardduty list-findings --detector-id $DETECTOR_ID --region eu-west-1 --max-results 5 | jq '.FindingIds'
 ```
 
 ---
@@ -209,23 +107,48 @@ aws guardduty list-organization-admin-accounts | jq '.AdminAccounts[] | {account
 ## Validate IAM Access Analyzer
 
 ```bash
-aws accessanalyzer list-analyzers | jq '.analyzers[] | {name: .name, type: .type, status: .status}'
+# List analyzers
+aws accessanalyzer list-analyzers --region eu-west-1 | jq '.analyzers[] | {name: .name, type: .type, status: .status}'
 
-ANALYZER_NAME=$(terraform output -raw access_analyzer_name)
-aws accessanalyzer list-findings --analyzer-name $ANALYZER_NAME | jq '.findings[] | {resourceType: .resourceType, status: .status}'
+# List findings (external access detected)
+aws accessanalyzer list-findings --analyzer-arn $(terraform output -raw access_analyzer_arn) --region eu-west-1 | jq '.findings[] | {resourceType: .resourceType, status: .status}'
 ```
 
 ---
 
-## Validate StackSets
+## SCP Reference (Exam Study)
 
-```bash
-aws cloudformation list-stack-sets --status ACTIVE | jq '.Summaries[] | {name: .StackSetName, status: .Status}'
+The `policies/` directory contains example SCPs. These require AWS Organizations to deploy but are important for the exam:
 
-STACKSET_NAME=$(terraform output -raw stackset_name)
-aws cloudformation list-stack-instances --stack-set-name $STACKSET_NAME | jq '.Summaries[] | {account: .Account, region: .Region, status: .Status}'
-aws cloudformation list-stack-set-operations --stack-set-name $STACKSET_NAME | jq '.Summaries[] | {operationId: .OperationId, action: .Action, status: .Status}'
+| Policy | Purpose |
+|--------|---------|
+| `scp-deny-public-s3.json` | Blocks public S3 bucket ACLs |
+| `scp-deny-unsupported-regions.json` | Restricts actions to allowed regions |
+| `scp-require-imdsv2.json` | Requires IMDSv2 for EC2 instances |
+| `scp-deny-root-user.json` | Blocks root user actions (except billing) |
+
+### Example SCP Structure
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyPublicS3",
+    "Effect": "Deny",
+    "Action": ["s3:PutBucketPublicAccessBlock"],
+    "Resource": "*",
+    "Condition": {
+      "Bool": { "s3:PublicAccessBlockConfiguration": "false" }
+    }
+  }]
+}
 ```
+
+**Key exam points:**
+- SCPs are deny-only (implicit deny, explicit allow not possible)
+- SCPs don't grant permissions, only restrict them
+- SCPs apply to all principals in attached accounts/OUs
+- Management account is never affected by SCPs
 
 ---
 
@@ -233,55 +156,37 @@ aws cloudformation list-stack-set-operations --stack-set-name $STACKSET_NAME | j
 
 ```bash
 cd ~/aws-devops-pro-projects/project-f-governance-multiaccount/infra-terraform
-
-# Delete StackSet instances first
-STACKSET_NAME=$(terraform output -raw stackset_name)
-aws cloudformation delete-stack-instances \
-  --stack-set-name $STACKSET_NAME \
-  --deployment-targets OrganizationalUnitIds=ou-xxxx-xxxxxxxx \
-  --regions eu-west-1 \
-  --no-retain-stacks
-
-# Wait for deletion, then destroy
 terraform destroy
 ```
 
-### Manual Cleanup
+### Manual Cleanup (if needed)
 
 ```bash
-# Disable delegated admins
-aws securityhub disable-organization-admin-account --admin-account-id 123456789012
-aws guardduty disable-organization-admin-account --admin-account-id 123456789012
-
-# Delete organisation trail
-aws cloudtrail delete-trail --name devops-pro-org-trail
-
 # Empty and delete CloudTrail bucket
+BUCKET=$(terraform output -raw cloudtrail_bucket)
 aws s3 rm s3://$BUCKET --recursive
 aws s3 rb s3://$BUCKET
 
-# Detach and delete SCPs
-for SCP_ID in $(aws organizations list-policies --filter SERVICE_CONTROL_POLICY --query 'Policies[?starts_with(Name, `devops-pro`)].Id' --output text); do
-  for TARGET in $(aws organizations list-targets-for-policy --policy-id $SCP_ID --query 'Targets[*].TargetId' --output text); do
-    aws organizations detach-policy --policy-id $SCP_ID --target-id $TARGET
-  done
-  aws organizations delete-policy --policy-id $SCP_ID
-done
+# Disable Security Hub
+aws securityhub disable-security-hub --region eu-west-1
+
+# Delete GuardDuty detector
+DETECTOR_ID=$(aws guardduty list-detectors --region eu-west-1 --query 'DetectorIds[0]' --output text)
+aws guardduty delete-detector --detector-id $DETECTOR_ID --region eu-west-1
+
+# Delete Access Analyzer
+aws accessanalyzer delete-analyzer --analyzer-name account-analyzer --region eu-west-1
 ```
 
 ---
 
 ## Key Exam Concepts Covered
 
-- ✅ Service Control Policies (SCPs)
-- ✅ SCP inheritance and evaluation
-- ✅ CloudTrail organisation trails
-- ✅ Security Hub organisation management
-- ✅ GuardDuty organisation management
-- ✅ IAM Access Analyzer (organisation scope)
-- ✅ CloudFormation StackSets
-- ✅ Delegated administrator accounts
-- ✅ Trusted access for AWS services
+- ✅ CloudTrail configuration and log validation
+- ✅ Security Hub findings and standards
+- ✅ GuardDuty threat detection
+- ✅ IAM Access Analyzer for external access
+- ✅ SCP structure and evaluation (reference only)
 
 ---
 
