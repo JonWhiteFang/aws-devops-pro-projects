@@ -5,6 +5,20 @@
 
 ---
 
+## Prerequisites
+
+**Required:**
+- S3 state bucket from bootstrap setup
+- CloudWatch Log Group `/ecs/demo-api` - either:
+  - Run Project A first (creates ECS infrastructure + log group), OR
+  - Create manually: `aws logs create-log-group --log-group-name /ecs/demo-api --region eu-west-1`
+
+**Optional (will deploy but show no data without):**
+- ALB/ECS from Project A (for metrics)
+- `canary_endpoint` variable (if empty, Synthetics canary skipped)
+
+---
+
 ## Overview
 
 Deploy comprehensive observability with:

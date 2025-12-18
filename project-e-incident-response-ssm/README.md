@@ -19,6 +19,15 @@ CloudWatch Alarm → EventBridge Rule → SSM Automation
 - AWS CLI configured
 - Permissions: SSM, EventBridge, CloudWatch, ECS, EC2, OpsCenter, IAM
 
+### Dependencies from Other Projects
+
+**Required:**
+- S3 state bucket (`devops-pro-tfstate-<account-id>`) from bootstrap setup
+
+**Soft dependencies (will deploy but runbooks won't function without):**
+- ECS cluster/service from Project A - referenced in IAM policies and SSM runbooks
+- Without real ECS resources, the `RestartEcsService` runbook will fail when executed
+
 ## Deployment
 
 ```bash

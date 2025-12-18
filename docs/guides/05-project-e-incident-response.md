@@ -5,6 +5,18 @@
 
 ---
 
+## Prerequisites
+
+**Required:**
+- S3 state bucket from bootstrap setup
+
+**Soft dependencies (will deploy but runbooks won't function without):**
+- ECS cluster/service from Project A - referenced in IAM policies and SSM runbooks
+- Without real ECS resources, the `RestartEcsService` runbook will fail when executed
+- The EC2 recovery runbooks work independently
+
+---
+
 ## Overview
 
 Deploy automated incident response with:

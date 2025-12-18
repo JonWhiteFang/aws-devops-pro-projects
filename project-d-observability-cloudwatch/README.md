@@ -18,6 +18,20 @@ X-Ray Traces → Service Map
 - AWS CLI configured
 - Permissions: CloudWatch, SNS, Lambda, IAM
 
+### Dependencies from Other Projects
+
+**Required:**
+- S3 state bucket (`devops-pro-tfstate-<account-id>`) from bootstrap setup
+- CloudWatch Log Group (`/ecs/demo-api`) - created by Project A, or create manually:
+  ```bash
+  aws logs create-log-group --log-group-name /ecs/demo-api --region eu-west-1
+  ```
+
+**Optional (dashboard/alarms will deploy but show no data):**
+- ALB from Project A (for ALB metrics)
+- ECS cluster/service from Project A (for ECS metrics)
+- `canary_endpoint` variable (if empty, Synthetics canary is skipped)
+
 ## Deployment
 
 ```bash

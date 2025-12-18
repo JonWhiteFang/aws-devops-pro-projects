@@ -5,6 +5,22 @@
 
 ---
 
+## Prerequisites
+
+**Required:**
+- S3 state bucket from bootstrap setup
+- **AWS Organizations** - must be run from the management account
+- **Audit account** - a separate AWS account to delegate Security Hub/GuardDuty admin
+
+⚠️ **This project cannot be run in a standalone AWS account.**
+
+If you don't have AWS Organizations, you can still review the code to understand:
+- SCP structure and policies
+- Organization CloudTrail configuration  
+- Delegated admin patterns for Security Hub/GuardDuty
+
+---
+
 ## Overview
 
 Deploy organisational governance with:
@@ -16,16 +32,9 @@ Deploy organisational governance with:
 
 ---
 
-## Prerequisites
+## Setup (if you have AWS Organizations)
 
-⚠️ **This project requires AWS Organizations.**
-
-You need:
-1. **Management account** access (root account of your organisation)
-2. **At least one member account** for testing SCPs and StackSets
-3. **Trusted access** enabled for relevant services
-
-If you don't have an organisation:
+If you don't have an organisation but want to create one:
 
 ```bash
 aws organizations create-organization --feature-set ALL

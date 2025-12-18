@@ -26,6 +26,23 @@ Audit Account  Dev/Prod Accounts
 - AWS Organizations enabled
 - Permissions: Organizations, CloudTrail, Security Hub, GuardDuty, IAM, S3
 
+### Dependencies and Constraints
+
+**Required:**
+- S3 state bucket (`devops-pro-tfstate-<account-id>`) from bootstrap setup
+- **AWS Organizations** - must be run from the management account
+- **Audit account** - a separate AWS account to delegate Security Hub/GuardDuty admin
+
+**Important:** This project cannot be run in a standalone AWS account. It requires:
+1. An AWS Organization with at least 2 accounts (management + audit)
+2. Management account credentials
+3. Organizations service enabled
+
+If you don't have AWS Organizations set up, you can still review the code to understand:
+- SCP structure and policies
+- Organization CloudTrail configuration
+- Delegated admin patterns for Security Hub/GuardDuty
+
 ## Deployment
 
 ```bash
