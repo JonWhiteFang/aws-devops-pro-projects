@@ -1,12 +1,3 @@
-variable "region" {
-  type    = string
-  default = "eu-west-1"
-}
-
-provider "aws" {
-  region = var.region
-}
-
 data "aws_caller_identity" "current" {}
 
 # Service Catalog Portfolio
@@ -174,15 +165,10 @@ resource "aws_s3_object" "s3_template" {
 }
 
 # Principal association (allow IAM users/roles to use portfolio)
+# Note: The developer_role must exist in your account before applying
 resource "aws_servicecatalog_principal_portfolio_association" "developers" {
   portfolio_id  = aws_servicecatalog_portfolio.main.id
-  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeveloperRole"
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.developer_role}"
 }
 
-output "portfolio_id" {
-  value = aws_servicecatalog_portfolio.main.id
-}
 
-output "product_id" {
-  value = aws_servicecatalog_product.s3_bucket.id
-}

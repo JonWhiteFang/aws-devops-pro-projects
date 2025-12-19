@@ -1,17 +1,3 @@
-variable "region" {
-  type    = string
-  default = "eu-west-1"
-}
-
-variable "distribution_regions" {
-  type    = list(string)
-  default = ["eu-west-1", "eu-west-2"]
-}
-
-provider "aws" {
-  region = var.region
-}
-
 data "aws_caller_identity" "current" {}
 
 # IAM role for Image Builder
@@ -187,10 +173,4 @@ resource "aws_imagebuilder_image_pipeline" "main" {
   }
 }
 
-output "pipeline_arn" {
-  value = aws_imagebuilder_image_pipeline.main.arn
-}
 
-output "recipe_arn" {
-  value = aws_imagebuilder_image_recipe.main.arn
-}
