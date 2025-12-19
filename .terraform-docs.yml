@@ -1,0 +1,22 @@
+formatter: markdown table
+
+sections:
+  show:
+    - requirements
+    - providers
+    - inputs
+    - outputs
+
+content: |
+  {{ .Requirements }}
+  {{ .Providers }}
+  {{ .Inputs }}
+  {{ .Outputs }}
+
+output:
+  file: ""
+  mode: inject
+
+sort:
+  enabled: true
+  by: required

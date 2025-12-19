@@ -18,6 +18,8 @@ jobs:
           - project-d-observability-cloudwatch/infra-terraform
           - project-e-incident-response-ssm/infra-terraform
           - project-f-governance-multiaccount/infra-terraform
+          - project-g-additional-topics/image-builder
+          - project-g-additional-topics/service-catalog
 
     steps:
       - uses: actions/checkout@v4
