@@ -1,0 +1,10 @@
+# Terraform Backend Configuration
+# Copy this file to backend.hcl and update with your values
+#
+# Usage: terraform init -backend-config=../../backend.hcl
+#        (run from any project's infra-terraform/ directory)
+
+bucket       = "your-tfstate-bucket-name"
+region       = "eu-west-1"
+use_lockfile = true
+encrypt      = true
