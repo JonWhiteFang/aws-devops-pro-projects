@@ -2,7 +2,7 @@
 
 This repository contains seven hands-on projects aligned to the AWS Certified DevOps Engineer – Professional exam domains.
 
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-19
 
 ---
 
@@ -201,7 +201,7 @@ This repository contains seven hands-on projects aligned to the AWS Certified De
 | Feature | Description |
 |---------|-------------|
 | Per-project READMEs | Prerequisites, deployment, variables, cleanup, costs |
-| Backend configuration | S3 + DynamoDB locking (commented, ready to enable) |
+| Backend configuration | Shared S3 backend via `backend.hcl` |
 | Example tfvars | `terraform.tfvars.example` in each project |
 | Outputs | Resource ARNs, URLs, connection info |
 | Pre-commit hooks | terraform fmt, validate, tflint, checkov |
@@ -229,14 +229,18 @@ This repository contains seven hands-on projects aligned to the AWS Certified De
 ## Quick Start
 
 ```bash
-# Clone and navigate to a project
+# One-time setup: configure your backend
+cp backend.hcl.example backend.hcl
+# Edit backend.hcl with your S3 bucket name
+
+# Navigate to a project
 cd project-a-cicd-ecs-bluegreen/infra-terraform
 
 # Copy and edit variables
 cp terraform.tfvars.example terraform.tfvars
 
 # Deploy
-terraform init
+terraform init -backend-config=../../backend.hcl
 terraform plan
 terraform apply
 

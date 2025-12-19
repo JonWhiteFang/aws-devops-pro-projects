@@ -28,19 +28,27 @@ Supplementary projects covering exam topics not addressed in the main projects. 
 ## Quick Start
 
 ```bash
+# One-time setup: configure your backend
+cp backend.hcl.example backend.hcl
+# Edit backend.hcl with your S3 bucket name
+
+# Deploy a project
 cd project-a-cicd-ecs-bluegreen/infra-terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values
-terraform init
+terraform init -backend-config=../../backend.hcl
 terraform plan
 terraform apply
 ```
 
 ## Prerequisites
 
-- Terraform >= 1.0
-- AWS CLI configured
+- Terraform >= 1.5.0
+- AWS CLI v2 configured
+- AWS SAM CLI (for Project G lambda-sam only)
 - Appropriate IAM permissions per project
+
+See [docs/guides/00-prerequisites.md](docs/guides/00-prerequisites.md) for detailed setup instructions.
 
 ## Repository Structure
 
@@ -52,20 +60,34 @@ terraform apply
 ├── project-e-incident-response-ssm/
 ├── project-f-governance-multiaccount/
 ├── project-g-additional-topics/
+│   ├── image-builder/              # EC2 Image Builder AMI pipeline
+│   ├── lambda-sam/                 # SAM Lambda with canary deployments
+│   └── service-catalog/            # Service Catalog portfolio
 ├── docs/
+│   ├── guides/                     # Step-by-step deployment guides
 │   ├── architecture-diagrams.md    # Mermaid diagrams
 │   └── exam-question-mapping.md    # Exam topic → project mapping
+├── backend.hcl.example             # Shared backend config template
 ├── .github/workflows/              # CI/CD validation
 ├── .pre-commit-config.yaml         # Pre-commit hooks
-├── overview.md                     # Detailed project overview
-└── suggestions.md                  # Implementation status
+├── .terraform-docs.yml             # Terraform docs config
+├── .tflint.hcl                     # TFLint rules
+└── overview.md                     # Detailed project overview
 ```
 
 ## Documentation
 
 - [overview.md](overview.md) - Detailed project breakdown
+- [docs/guides/](docs/guides/) - Step-by-step deployment guides
 - [docs/architecture-diagrams.md](docs/architecture-diagrams.md) - Visual architecture diagrams
 - [docs/exam-question-mapping.md](docs/exam-question-mapping.md) - Exam topics mapped to projects
+- [docs/cost-management.md](docs/cost-management.md) - Cost optimization strategies
+- [docs/quick-reference.md](docs/quick-reference.md) - Common commands and patterns
+- [docs/faq.md](docs/faq.md) - Frequently asked questions
+- [docs/security-considerations.md](docs/security-considerations.md) - Security best practices
+- [docs/extending-projects.md](docs/extending-projects.md) - Customization for production
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+- [CHANGELOG.md](CHANGELOG.md) - Version history
 - Per-project READMEs with deployment instructions
 
 ## Validation
