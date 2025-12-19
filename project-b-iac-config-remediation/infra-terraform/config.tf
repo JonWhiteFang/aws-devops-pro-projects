@@ -1,8 +1,3 @@
-variable "region" {
-  type    = string
-  default = "eu-west-1"
-}
-
 resource "aws_s3_bucket" "config_logs" {
   bucket        = "config-logs-${random_id.sfx.hex}"
   force_destroy = true
@@ -273,15 +268,4 @@ resource "aws_config_remediation_configuration" "required_tags" {
   retry_attempt_seconds      = 60
 }
 
-# Outputs
-output "config_recorder_name" {
-  value = aws_config_configuration_recorder.rec.name
-}
 
-output "config_bucket" {
-  value = aws_s3_bucket.config_logs.bucket
-}
-
-output "lambda_function_name" {
-  value = aws_lambda_function.required_tags.function_name
-}

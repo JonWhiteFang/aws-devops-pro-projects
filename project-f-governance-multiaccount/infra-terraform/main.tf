@@ -1,8 +1,3 @@
-variable "region" {
-  type    = string
-  default = "eu-west-1"
-}
-
 data "aws_caller_identity" "current" {}
 
 # S3 Bucket for CloudTrail logs
@@ -72,19 +67,4 @@ resource "aws_accessanalyzer_analyzer" "main" {
   type          = "ACCOUNT"
 }
 
-# Outputs
-output "cloudtrail_bucket" {
-  value = aws_s3_bucket.cloudtrail.bucket
-}
 
-output "cloudtrail_name" {
-  value = aws_cloudtrail.main.name
-}
-
-output "access_analyzer_arn" {
-  value = aws_accessanalyzer_analyzer.main.arn
-}
-
-output "guardduty_detector_id" {
-  value = aws_guardduty_detector.main.id
-}
