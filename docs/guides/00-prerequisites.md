@@ -6,7 +6,7 @@ Complete these steps before starting any project.
 
 ## Required Tools
 
-### 1. Terraform (>= 1.5.0)
+### 1. Terraform >= 1.5.0
 
 ```bash
 # macOS
@@ -163,28 +163,36 @@ aws configure get region
 aws ec2 describe-vpcs --max-items 1
 ```
 
-### Step 4: (Optional) Enable Remote State
+### Step 4: Configure Remote State Backend
 
-For production use, enable S3 backend:
+All projects use a shared S3 backend configuration. Set this up once:
 
 ```bash
 # Create S3 bucket for state
-aws s3 mb s3://devops-pro-tfstate-$(aws sts get-caller-identity --query Account --output text)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws s3 mb s3://devops-pro-tfstate-${ACCOUNT_ID}
 
 # Enable versioning
 aws s3api put-bucket-versioning \
-  --bucket devops-pro-tfstate-$(aws sts get-caller-identity --query Account --output text) \
+  --bucket devops-pro-tfstate-${ACCOUNT_ID} \
   --versioning-configuration Status=Enabled
-
-# Create DynamoDB table for locking
-aws dynamodb create-table \
-  --table-name devops-pro-tfstate-lock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
 ```
 
-Then uncomment the backend configuration in each project's `backend.tf`.
+Then configure the shared backend file:
+
+```bash
+# Copy the template
+cp backend.hcl.example backend.hcl
+
+# Edit with your bucket name
+# bucket = "devops-pro-tfstate-YOUR_ACCOUNT_ID"
+```
+
+When initializing any project, use:
+
+```bash
+terraform init -backend-config=../../backend.hcl
+```
 
 ---
 
